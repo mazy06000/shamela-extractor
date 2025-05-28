@@ -28,3 +28,6 @@ Thumbs.db
 
 # Compiled Java classes (will be regenerated)
 *.class
+
+# JSON Rar
+*.rar
