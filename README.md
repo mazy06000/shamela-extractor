@@ -137,7 +137,8 @@ python clean_files.py
 
 ## Output Format
 
-Each book JSON contains:
+Example book JSON:
+
 ```json
 {
     "book_id": "1",
@@ -226,7 +227,7 @@ For a complete Shamela library:
 
 ## File Naming Convention
 
-- **Input CSV files:** `1000.csv`, `1001.csv`, etc. (book IDs)
+- **Input CSV files:** `1000.csv`, `1001.csv`, etc. (based on Shamela's book IDs)
 - **Output JSON files:** `1000.json`, `1001.json`, etc. (matching book IDs)
 - **Log files:** Timestamped in `logs/` directory
 
