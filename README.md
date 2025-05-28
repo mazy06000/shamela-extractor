@@ -50,9 +50,9 @@ This tool extracts content from Shamela's Lucene indices and SQLite databases, c
    ```
 
 4. **Compile the java extractor:**
-```bash
-javac -cp "lib/*" java/ShamelaIndexExporter.java
-```
+    ```bash
+    javac -cp "lib/*" java/ShamelaIndexExporter.java
+    ```
 
 ## Directory Structure
 
