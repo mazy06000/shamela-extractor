@@ -58,15 +58,15 @@ This tool extracts content from Shamela's Lucene indices and SQLite databases, c
 
 Your setup should look like this:
 ```
-shamela-pipeline/
+shamela-extractor/
 ├── lib/
 │   ├── lucene-core-9.10.0.jar
 │   └── lucene-backward-codecs-9.10.0.jar
 ├── java/
 │   ├── ShamelaIndexExporter.java
-│   ├── ShamelaIndexExporter.class
-│   ├── ShamelaIndexExporter$TitleDoc.class
-│   └── ShamelaIndexExporter$DocWithId.class
+│   ├── ShamelaIndexExporter.class (after compilation)
+│   ├── ShamelaIndexExporter$TitleDoc.class (after compilation)
+│   └── ShamelaIndexExporter$DocWithId.class (after compilation)
 ├── extract_indices.py
 ├── build_jsons.py
 └── README.md
