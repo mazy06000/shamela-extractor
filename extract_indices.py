@@ -47,7 +47,7 @@ class LuceneIndexExtractor:
                 issues.append("Java is not installed or not in PATH")
             else:
                 java_version = result.stderr.split('\n')[0]
-                print(f"  ✓ Java found: {java_version}")
+                print(f"Java found: {java_version}")
         except FileNotFoundError:
             issues.append("Java is not installed or not in PATH")
         
@@ -55,14 +55,14 @@ class LuceneIndexExtractor:
         if not self.lucene_store_path.exists():
             issues.append(f"Shamela Lucene store not found: {self.lucene_store_path}")
         else:
-            print(f"  ✓ Shamela Lucene store found: {self.lucene_store_path}")
+            print(f"Shamela Lucene store found: {self.lucene_store_path}")
         
         # Check Java class file
         java_class = Path("java/ShamelaIndexExporter.class")
         if not java_class.exists():
             issues.append("ShamelaIndexExporter.class not found /java/ directory")
         else:
-            print(f"  ✓ Java class file found: {java_class}")
+            print(f"Java class file found: {java_class}")
         
         # Check Lucene JAR files
         lib_dir = Path("lib")
@@ -73,7 +73,7 @@ class LuceneIndexExtractor:
             if not lucene_jars:
                 issues.append("No lucene-core-*.jar files found in lib/ directory")
             else:
-                print(f"  ✓ Lucene JAR found: {lucene_jars[0].name}")
+                print(f"Lucene JAR found: {lucene_jars[0].name}")
         
         # Check available disk space
         try:
@@ -81,17 +81,17 @@ class LuceneIndexExtractor:
             if free_space < 20 * 1024 * 1024 * 1024:  # 20 GB
                 issues.append(f"Low disk space: {free_space / (1024**3):.1f} GB free, recommend 20+ GB")
             else:
-                print(f"  ✓ Disk space: {free_space / (1024**3):.1f} GB available")
+                print(f"Disk space: {free_space / (1024**3):.1f} GB available")
         except:
-            print("  ⚠ Could not check disk space")
+            print("Could not check disk space")
         
         if issues:
-            print("\n❌ Issues found:")
+            print("\nIssues found:")
             for issue in issues:
                 print(f"  - {issue}")
             return False
         
-        print("  ✓ All prerequisites satisfied!")
+        print("All prerequisites satisfied!")
         return True
     
     def _get_free_space(self, path):
@@ -165,7 +165,7 @@ class LuceneIndexExtractor:
                 end_time = datetime.now()
                 duration = end_time - start_time
                 
-                print(f"\n✓ Extraction completed successfully!")
+                print(f"\nExtraction completed successfully!")
                 print(f"Duration: {duration}")
                 
                 # Show output summary
@@ -176,12 +176,12 @@ class LuceneIndexExtractor:
                 
                 return True
             else:
-                print(f"\n❌ Java extraction failed with return code: {return_code}")
+                print(f"\nJava extraction failed with return code: {return_code}")
                 self._log(f"Java extraction failed with return code: {return_code}")
                 return False
                 
         except Exception as e:
-            print(f"\n❌ Error running Java extractor: {str(e)}")
+            print(f"\nError running Java extractor: {str(e)}")
             self._log(f"Error running Java extractor: {str(e)}")
             return False
     
@@ -231,12 +231,12 @@ class LuceneIndexExtractor:
             if expected.exists():
                 if expected.is_file():
                     size = expected.stat().st_size / (1024**2)
-                    print(f"  ✓ {expected.name} ({size:.1f} MB)")
+                    print(f"{expected.name} ({size:.1f} MB)")
                 else:
                     count = len(list(expected.glob("*")))
-                    print(f"  ✓ {expected.name}/ ({count:,} files)")
+                    print(f"{expected.name}/ ({count:,} files)")
             else:
-                print(f"  ❌ {expected.name} - NOT FOUND")
+                print(f"{expected.name} - NOT FOUND")
     
     def _log(self, message):
         """Write message to log file"""
