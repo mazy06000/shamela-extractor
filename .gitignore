@@ -1,0 +1,30 @@
+# .gitignore
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.env
+.venv
+env/
+venv/
+
+# Output directories (users will generate these)
+exported_indices/
+books_json/
+logs/
+exported_metadata/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Compiled Java classes (will be regenerated)
+*.class
