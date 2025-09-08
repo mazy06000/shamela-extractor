@@ -202,7 +202,7 @@ class JSONBuilder:
         for csv_file in metadata_dir.glob("*.csv"):
             table_name = csv_file.stem
             try:
-                df = pd.read_csv(csv_file)
+                df = pd.read_csv(csv_file, encoding='utf-8')
                 metadata[table_name] = df
                 print(f"  Loaded {table_name}: {len(df)} rows")
             except Exception as e:
@@ -262,7 +262,7 @@ class JSONBuilder:
             return {}
         
         try:
-            df = pd.read_csv(csv_path)
+            df = pd.read_csv(csv_path, encoding='utf-8')
             return {str(row["id"]): row["body_store"] 
                    for _, row in df.iterrows() 
                    if "id" in row and "body_store" in row 
@@ -286,7 +286,7 @@ class JSONBuilder:
             return None
         
         try:
-            book_content_df = pd.read_csv(book_content_path)
+            book_content_df = pd.read_csv(book_content_path, encoding='utf-8')
             book_content = book_content_df.to_dict('records')
         except Exception as e:
             return None

@@ -1,5 +1,6 @@
 import java.io.*;
 import java.util.*;
+import java.nio.charset.StandardCharsets;
 import org.apache.lucene.document.*;
 import org.apache.lucene.index.*;
 import org.apache.lucene.store.*;
@@ -133,8 +134,8 @@ public class ShamelaIndexExporter {
         String outputFile = OUTPUT_DIR + File.separator + indexName + ".csv";
         int totalDocs = reader.maxDoc();
         System.out.println("Exporting " + totalDocs + " documents...");
-        try (FileWriter fw = new FileWriter(outputFile);
-                PrintWriter pw = new PrintWriter(fw)) {
+        try (OutputStreamWriter osw = new OutputStreamWriter(new FileOutputStream(outputFile), StandardCharsets.UTF_8);
+                PrintWriter pw = new PrintWriter(osw)) {
             // Write header
             pw.println("DocID," + String.join(",", fieldNameList));
             // Write data without verbose reporting
@@ -200,8 +201,8 @@ public class ShamelaIndexExporter {
             System.out.println("Processing book: " + bookId);
             // Create output file for this book
             String bookFile = booksFolder + File.separator + bookId + ".csv";
-            try (FileWriter fw = new FileWriter(bookFile);
-                    PrintWriter pw = new PrintWriter(fw)) {
+            try (OutputStreamWriter osw = new OutputStreamWriter(new FileOutputStream(bookFile), StandardCharsets.UTF_8);
+                    PrintWriter pw = new PrintWriter(osw)) {
                 // Write header
                 pw.println("DocID,BookID,PageID," + String.join(",", fieldNameList));
                 // Find all docs for this book_id
@@ -312,8 +313,8 @@ public class ShamelaIndexExporter {
             // Create output file for this book's titles
             String titleFile = titlesFolder + File.separator + "title_" + bookId + ".csv";
 
-            try (FileWriter fw = new FileWriter(titleFile);
-                    PrintWriter pw = new PrintWriter(fw)) {
+            try (OutputStreamWriter osw = new OutputStreamWriter(new FileOutputStream(titleFile), StandardCharsets.UTF_8);
+                    PrintWriter pw = new PrintWriter(osw)) {
 
                 // Write header (simplified as per requirement)
                 pw.println("DocID,id,body");
