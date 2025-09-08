@@ -7,16 +7,20 @@ from datetime import datetime
 import re
 import pandas as pd
 from pathlib import Path
+import sys
+import argparse
 
 class JSONBuilder:
-    def __init__(self, shamela_base_path, extracted_data_path):
+    def __init__(self, shamela_base_path, extracted_data_path, test_mode=False):
         """
         Initialize the json builder
         
         Args:
             shamela_base_path: Path to shamela4 directory
             extracted_data_path: Path where CSV files were extracted
+            test_mode: If True, process only the first book found
         """
+        self.test_mode = test_mode
         self.shamela_base_path = Path(shamela_base_path)
         self.extracted_data_path = Path(extracted_data_path)
         
@@ -141,13 +145,19 @@ class JSONBuilder:
                 failed_count += 1
                 self._log(log_file, f"ERROR: Book {book_id} - {str(e)}")
             
-            # Progress update every 100 books
-            if (i + 1) % 100 == 0:
+            # Progress update every 100 books (or always in test mode)
+            if (i + 1) % 100 == 0 or self.test_mode:
                 elapsed = datetime.now() - start_time
                 rate = (i + 1) / elapsed.total_seconds() * 60  # books per minute
                 print(f"  Progress: {i + 1:,}/{len(book_csv_files):,} "
                       f"({processed_count:,} successful, {failed_count:,} failed) "
                       f"[{rate:.1f} books/min]")
+            
+            # Exit after first book in test mode
+            if self.test_mode and processed_count > 0:
+                print(f"\n🧪 TEST MODE: Stopping after first successful book (ID: {book_id})")
+                self._log(log_file, f"TEST MODE: Stopped after processing book {book_id}")
+                break
         
         # Final summary
         end_time = datetime.now()
@@ -356,9 +366,14 @@ class JSONBuilder:
             page_id = str(page_row.get('PageID', ''))
             structure = page_structure.get(page_id, {})
             
+            # Apply footnote separation logic first
+            raw_body = page_row.get('body', '')
+            raw_foot = page_row.get('foot', '')
+            separated_body, separated_footnote = self._separate_body_footnote(raw_body, raw_foot)
+            
             # Process text content
-            body = self._process_text(page_row.get('body', ''), title_hierarchy)
-            footnote = self._process_text(page_row.get('foot', ''), title_hierarchy)
+            body = self._process_text(separated_body, title_hierarchy)
+            footnote = self._process_text(separated_footnote, title_hierarchy)
             
             part = structure.get('part', '') or ''
             page_number = structure.get('page', page_id)
@@ -469,6 +484,40 @@ class JSONBuilder:
         
         return text
     
+    def _separate_body_footnote(self, body, foot):
+        """
+        Smart footnote separation logic:
+        - If body is empty and foot contains _____+ pattern: split foot into body and footnote
+        - If body is empty and foot has no pattern: move foot to body, empty footnote
+        - If body is not empty: keep original (body=body, footnote=foot)
+        """
+        # Ensure strings
+        body = str(body) if body and not pd.isna(body) else ""
+        foot = str(foot) if foot and not pd.isna(foot) else ""
+        
+        # Clean up whitespace
+        body = body.strip()
+        foot = foot.strip()
+        
+        # If body is not empty, use original logic
+        if body:
+            return body, foot
+        
+        # If body is empty, apply separation logic
+        if not body and foot:
+            # Look for sequence of 5 or more underscores as separator
+            separator_pattern = r'_{5,}'
+            if re.search(separator_pattern, foot):
+                # Split on first occurrence of 5+ underscores
+                parts = re.split(separator_pattern, foot, 1)
+                return parts[0].strip(), parts[1].strip() if len(parts) > 1 else ""
+            else:
+                # No separator: foot is actually the body
+                return foot, ""
+        
+        # Both empty
+        return body, foot
+    
     def _parse_json_field(self, json_str):
         """Parse JSON string field from database"""
         if not json_str or pd.isna(json_str) or json_str.strip() == '':
@@ -517,24 +566,49 @@ class JSONBuilder:
 
 def main():
     """Main function"""
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Build JSON files from Shamela extraction')
+    parser.add_argument('--test-single-book', action='store_true', 
+                       help='Test mode: process only the first book found')
+    parser.add_argument('--shamela-path', type=str, default='C:/shamela4',
+                       help='Path to Shamela base directory (default: C:/shamela4)')
+    parser.add_argument('--extracted-path', type=str, default='.',
+                       help='Path to extracted data directory (default: current directory)')
+    
+    args = parser.parse_args()
+    
     print("SHAMELA JSON BUILDER")
     print("=" * 50)
     
-    # Get paths
-    shamela_path = input("Enter Shamela base path (e.g., C:/shamela4): ").strip()
-    if not shamela_path:
-        shamela_path = "C:/shamela4"
-        print(f"Using default: {shamela_path}")
+    if args.test_single_book:
+        print("🧪 RUNNING IN TEST MODE - Will process only first book")
+        print("=" * 50)
     
-    extracted_path = input("Enter extracted data path (default: current directory): ").strip()
-    if not extracted_path:
-        extracted_path = os.getcwd()
-        print(f"Using default: {extracted_path}")
+    # Use command line args or prompt for interactive mode
+    if len(sys.argv) == 1:  # No command line args, interactive mode
+        shamela_path = input("Enter Shamela base path (e.g., C:/shamela4): ").strip()
+        if not shamela_path:
+            shamela_path = "C:/shamela4"
+            print(f"Using default: {shamela_path}")
+        
+        extracted_path = input("Enter extracted data path (default: current directory): ").strip()
+        if not extracted_path:
+            extracted_path = os.getcwd()
+            print(f"Using default: {extracted_path}")
+        
+        test_mode = False
+    else:
+        shamela_path = args.shamela_path
+        extracted_path = args.extracted_path if args.extracted_path != '.' else os.getcwd()
+        test_mode = args.test_single_book
+        
+        print(f"Shamela path: {shamela_path}")
+        print(f"Extracted data path: {extracted_path}")
     
     print()
     
     # Create builder
-    builder = JSONBuilder(shamela_path, extracted_path)
+    builder = JSONBuilder(shamela_path, extracted_path, test_mode=test_mode)
     
     # Build JSON files
     success = builder.build_json_files()
