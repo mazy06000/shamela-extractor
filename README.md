@@ -5,12 +5,17 @@ A complete pipeline for extracting text content from Shamela (المكتبة ا�
 ## Overview
 
 This tool extracts content from Shamela's Lucene indices and SQLite databases, converting them into clean JSON files with complete metadata including:
-- Full book text with page structure
+- Full book text with page structure and proper UTF-8 Arabic text support
 - Author information and metadata
 - Category classifications
-- Title hierarchies
-- Footnotes and references
+- Title hierarchies with optional table of contents generation
+- Footnotes and references with improved separation logic
 - Requires ~40GB of disk space for extraction of full Shamela installation
+
+**New Features:**
+- **Test Mode**: Process single books for faster development (`--test-single-book`)
+- **Table of Contents**: Generate hierarchical TOC with accurate page links (`--generate-toc`)
+- **UTF-8 Support**: Proper Arabic text display (no more '????' characters)
 
 ## Prerequisites
 
@@ -86,18 +91,26 @@ Default shamela installation:
 ### Step 1: Extract Lucene Indices
 
 ```bash
+# Full extraction (interactive mode)
 python extract_indices.py
+
+# Or with command line arguments
+python extract_indices.py --shamela-path "C:/shamela4" --output-path "./output"
+
+# Test mode - process only first book (faster for development)
+python extract_indices.py --test-single-book
 ```
 
 **What it does:**
-- Extracts all Lucene indices to CSV files
+- Extracts all Lucene indices to CSV files with proper UTF-8 encoding
 - Creates individual CSV files for each book's content (~17GB for full Shamela installation)
 - Exports author and book metadata
 - Validates prerequisites automatically
 
-**You'll be prompted for:**
-- Shamela base path (e.g., `C:/shamela4` or `/path/to/shamela4`)
-- Output directory (default: current directory)
+**Options:**
+- Interactive mode: You'll be prompted for Shamela path and output directory
+- Command line mode: Use `--shamela-path` and `--output-path` flags
+- Test mode: Use `--test-single-book` for single book processing (~2 minutes vs 30+ minutes)
 
 **Output:**
 - `exported_indices/book_data/` - Individual book CSV files (`1000.csv`, `1001.csv`, etc.)
@@ -108,21 +121,33 @@ python extract_indices.py
 ### Step 2: Build JSON Files
 
 ```bash
+# Basic JSON generation (interactive mode)
 python build_jsons.py
+
+# With table of contents generation
+python build_jsons.py --generate-toc
+
+# Test mode with TOC (single book only)
+python build_jsons.py --test-single-book --generate-toc
+
+# With command line arguments
+python build_jsons.py --shamela-path "C:/shamela4" --extracted-data-path "./output" --generate-toc
 ```
 
 **What it does:**
 - Combines CSV data with SQLite metadata
-- Creates structured JSON files for each book
-- Processes text content and hierarchies
+- Creates structured JSON files for each book with proper UTF-8 Arabic text
+- Processes text content and hierarchies with improved footnote separation
 - Links authors, categories, and metadata
+- Optionally generates table of contents with accurate page mapping
 
-**You'll be prompted for:**
-- Shamela base path (same as Step 1)
-- Extracted data path (where Step 1 outputs are located, defaults to cwd)
+**Options:**
+- `--generate-toc`: Creates hierarchical table of contents with proper page links
+- `--test-single-book`: Process only first book for faster development
+- Interactive mode: Prompts for paths if not provided via command line
 
 **Output:**
-- `books_json/1000.json`, `books_json/1001.json`, etc. - Complete book JSON files
+- `books_json/1000.json`, `books_json/1001.json`, etc. - Complete book JSON files with optional TOC
 - `logs/json_building.log` - Processing log
 
 
@@ -137,7 +162,7 @@ python clean_files.py
 
 ## Output Format
 
-Example book JSON:
+Example book JSON (with optional table of contents when using `--generate-toc` flag):
 
 ```json
 {
@@ -190,6 +215,19 @@ Example book JSON:
               ...
             ]
         }
+    ],
+    "table_of_contents": [
+        {
+            "page": "1/5",
+            "title": "مقدمة المحقق",
+            "chapters": [
+                {
+                    "page": "1/9",
+                    "title": "ترجمة المؤلف",
+                    "chapters": []
+                }
+            ]
+        }
     ]
 }
 ```
@@ -218,12 +256,21 @@ Example book JSON:
 - Check `logs/json_building.log` for specific errors
 - Verify individual book databases in `database/book/` exist
 
+**Arabic text shows as '????' characters**
+- This should be fixed automatically with the new UTF-8 support
+- If still occurring, ensure you're using the latest version
+
+**Table of contents not generating**
+- Ensure you're using the `--generate-toc` flag with `build_jsons.py`
+- Check that individual book databases exist in `database/book/`
+
 ## Output Size Expectations
 
 For a complete Shamela library:
 - **CSV files:** ~17GB
 - **JSON files:** ~18GB
-- **Processing time:** 30 minutes+ for extracting indices and 30+ minutes for building JSONs
+- **Processing time:** 30+ minutes for extracting indices and building JSONs, and about 4 minutes 30 seconds for generating the table of contents (TOC)
+- **Test mode:** ~2 minutes for a single book (ideal for development and testing)
 
 ## File Naming Convention
 
