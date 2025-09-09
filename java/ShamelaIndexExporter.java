@@ -16,11 +16,12 @@ public class ShamelaIndexExporter {
     // These will be set from command line arguments
     private static String BASE_INDEX_PATH;
     private static String OUTPUT_DIR;
+    private static boolean TEST_MODE = false;
 
     public static void main(String[] args) {
         // Validate command line arguments
-        if (args.length != 2) {
-            System.out.println("Usage: ShamelaIndexExporter <shamela_store_path> <output_directory>");
+        if (args.length < 2) {
+            System.out.println("Usage: ShamelaIndexExporter <shamela_store_path> <output_directory> [--test-single-book]");
             System.out.println("Example: ShamelaIndexExporter /path/to/shamela4/database/store ./exported_indices");
             return;
         }
@@ -28,6 +29,12 @@ public class ShamelaIndexExporter {
         // Set paths from command line arguments
         BASE_INDEX_PATH = args[0];
         OUTPUT_DIR = args[1];
+        
+        // Check for test mode flag
+        if (args.length > 2 && args[2].equals("--test-single-book")) {
+            TEST_MODE = true;
+            System.out.println("TEST MODE: Will process only first book found");
+        }
         
         System.out.println("Starting Shamela Index Export");
         System.out.println("Source: " + BASE_INDEX_PATH);
@@ -199,6 +206,12 @@ public class ShamelaIndexExporter {
         // Process books in sorted order
         for (String bookId : bookIdList) {
             System.out.println("Processing book: " + bookId);
+            
+            // In test mode, process only the first book
+            if (TEST_MODE && !bookId.equals(bookIdList.get(0))) {
+                System.out.println("TEST MODE: Skipping book " + bookId + " (processing only first book)");
+                continue;
+            }
             // Create output file for this book
             String bookFile = booksFolder + File.separator + bookId + ".csv";
             try (OutputStreamWriter osw = new OutputStreamWriter(new FileOutputStream(bookFile), StandardCharsets.UTF_8);
@@ -309,6 +322,12 @@ public class ShamelaIndexExporter {
 
         for (String bookId : bookIdList) {
             System.out.println("Processing titles for book: " + bookId);
+            
+            // In test mode, process only the first book
+            if (TEST_MODE && !bookId.equals(bookIdList.get(0))) {
+                System.out.println("TEST MODE: Skipping titles for book " + bookId + " (processing only first book)");
+                continue;
+            }
 
             // Create output file for this book's titles
             String titleFile = titlesFolder + File.separator + "title_" + bookId + ".csv";

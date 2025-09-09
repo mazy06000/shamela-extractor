@@ -11,7 +11,7 @@ import sys
 import argparse
 
 class JSONBuilder:
-    def __init__(self, shamela_base_path, extracted_data_path, test_mode=False):
+    def __init__(self, shamela_base_path, extracted_data_path, test_mode=False, generate_toc=False):
         """
         Initialize the json builder
         
@@ -19,8 +19,10 @@ class JSONBuilder:
             shamela_base_path: Path to shamela4 directory
             extracted_data_path: Path where CSV files were extracted
             test_mode: If True, process only the first book found
+            generate_toc: If True, generate table of contents and remove HTML tags
         """
         self.test_mode = test_mode
+        self.generate_toc = generate_toc
         self.shamela_base_path = Path(shamela_base_path)
         self.extracted_data_path = Path(extracted_data_path)
         
@@ -47,14 +49,14 @@ class JSONBuilder:
         if not self.master_db_path.exists():
             issues.append(f"Shamela master.db not found: {self.master_db_path}")
         else:
-            print(f"  ✓ Master database found: {self.master_db_path}")
+            print(f"  [OK] Master database found: {self.master_db_path}")
         
         # Check book databases directory
         if not self.books_db_path.exists():
             issues.append(f"Book databases directory not found: {self.books_db_path}")
         else:
             book_count = len(list(self.books_db_path.glob("**/*.db")))
-            print(f"  ✓ Book databases found: {book_count:,} files")
+            print(f"  [OK] Book databases found: {book_count:,} files")
         
         # Check CSV input directory
         if not self.csv_input_path.exists():
@@ -153,9 +155,9 @@ class JSONBuilder:
                       f"({processed_count:,} successful, {failed_count:,} failed) "
                       f"[{rate:.1f} books/min]")
             
-            # Exit after first book in test mode
-            if self.test_mode and processed_count > 0:
-                print(f"\n🧪 TEST MODE: Stopping after first successful book (ID: {book_id})")
+            # Exit after first book in test mode (regardless of success/failure)
+            if self.test_mode:
+                print(f"\nTEST MODE: Stopping after first book attempt (ID: {book_id})")
                 self._log(log_file, f"TEST MODE: Stopped after processing book {book_id}")
                 break
         
@@ -371,6 +373,9 @@ class JSONBuilder:
             raw_foot = page_row.get('foot', '')
             separated_body, separated_footnote = self._separate_body_footnote(raw_body, raw_foot)
             
+            # Store original body for TOC generation
+            original_body = separated_body
+            
             # Process text content
             body = self._process_text(separated_body, title_hierarchy)
             footnote = self._process_text(separated_footnote, title_hierarchy)
@@ -387,7 +392,8 @@ class JSONBuilder:
                 "page_id": page_id,
                 "page_number": str(page_number),
                 "body": body,
-                "footnote": footnote
+                "footnote": footnote,
+                "original_body": original_body  # Keep for TOC generation
             }
             
             pages_by_part[part].append(page_data)
@@ -436,8 +442,17 @@ class JSONBuilder:
                 except ValueError:
                     continue
         
+        # Generate table of contents if requested
+        toc = self._build_table_of_contents(book_id, title_hierarchy, book_content, page_structure)
+        
+        # Clean up original_body from parts before output
+        for part in parts_list:
+            for page in part.get('pages', []):
+                if 'original_body' in page:
+                    del page['original_body']
+        
         # Build final structure
-        return {
+        book_json = {
             "book_id": book_id,
             "title": book_data.get('book_name', ''),
             "book_date": book_data.get('book_date', ''),
@@ -454,6 +469,12 @@ class JSONBuilder:
             "author_meta": author_meta_content,
             "parts": parts_list
         }
+        
+        # Add table of contents if generated
+        if toc:
+            book_json["table_of_contents"] = toc
+        
+        return book_json
     
     def _process_text(self, text, title_hierarchy):
         """Process text content by transforming span tags"""
@@ -482,7 +503,85 @@ class JSONBuilder:
         # Remove other span tags
         text = re.sub(r'<span[\s\S]*?>([\s\S]*?)</span>', r'\1', text)
         
+        # Remove HTML tags when generating TOC
+        if self.generate_toc:
+            # Remove title tags but keep content
+            text = re.sub(r'<title[^>]*>([\s\S]*?)</title>', r'\1', text)
+            # Remove any remaining HTML tags
+            text = re.sub(r'<[^>]+>', '', text)
+        
         return text
+    
+    def _build_table_of_contents(self, book_id, title_hierarchy, book_content, page_structure):
+        """Build table of contents in the user's proven structure"""
+        if not self.generate_toc:
+            return None
+        
+        # Load title data from CSV (just title text)
+        title_data = self._load_title_data(book_id)
+        if not title_data:
+            return None
+        
+        # Build title-to-page mapping from SQLite database
+        title_page_mapping = self._build_title_page_mapping_from_sqlite(book_id, page_structure)
+        
+        # Build hierarchical TOC structure using Python-built mapping
+        toc_items = []
+        processed_titles = set()
+        
+        for title_id, title_text in title_data.items():
+            if title_id in processed_titles:
+                continue
+            
+            parent_id = title_hierarchy.get(title_id, "0")
+            
+            if parent_id == "0":  # Root level item
+                page_number = title_page_mapping.get(title_id, "1")
+                toc_item = {
+                    "page": f"{book_id}/{page_number}",
+                    "title": title_text.strip(),
+                    "chapters": []
+                }
+                
+                # Find children
+                children = self._find_title_children(title_id, title_hierarchy, title_data, title_page_mapping, book_id)
+                toc_item["chapters"] = children
+                
+                toc_items.append(toc_item)
+                processed_titles.add(title_id)
+                
+                # Mark children as processed
+                self._mark_children_processed(title_id, title_hierarchy, processed_titles)
+        
+        return toc_items
+    
+    def _find_title_children(self, parent_id, title_hierarchy, title_data, title_page_mapping, book_id):
+        """Recursively find children titles"""
+        children = []
+        
+        for title_id, title_text in title_data.items():
+            if title_hierarchy.get(title_id, "0") == parent_id:
+                page_number = title_page_mapping.get(title_id, "1")
+                child_item = {
+                    "page": f"{book_id}/{page_number}",
+                    "title": title_text.strip(),
+                    "chapters": []
+                }
+                
+                # Recursively find grandchildren
+                grandchildren = self._find_title_children(title_id, title_hierarchy, title_data, title_page_mapping, book_id)
+                child_item["chapters"] = grandchildren
+                
+                children.append(child_item)
+        
+        return children
+    
+    def _mark_children_processed(self, parent_id, title_hierarchy, processed_titles):
+        """Mark all children as processed recursively"""
+        for title_id in title_hierarchy:
+            if title_hierarchy.get(title_id, "0") == parent_id:
+                processed_titles.add(title_id)
+                self._mark_children_processed(title_id, title_hierarchy, processed_titles)
     
     def _separate_body_footnote(self, body, foot):
         """
@@ -545,6 +644,63 @@ class JSONBuilder:
             print(f"Average per file: {total_size / len(json_files) / 1024:.1f} KB")
         print(f"Location: {self.json_output_dir}")
     
+    def _load_title_data(self, book_id):
+        """Load title data for the book from CSV file"""
+        title_path = self.csv_input_path / "title_data" / f"title_{book_id}.csv" 
+        if not title_path.exists():
+            return {}
+        
+        try:
+            df = pd.read_csv(title_path, encoding='utf-8')
+            # Return mapping of numeric_title_id -> title_text
+            # Extract numeric part from id like "1-8" -> "8"
+            title_mapping = {}
+            for _, row in df.iterrows():
+                if "id" in row and "body" in row and pd.notna(row["body"]):
+                    full_id = str(row["id"])
+                    # Extract numeric part after the dash (e.g., "1-8" -> "8")
+                    if '-' in full_id:
+                        numeric_id = full_id.split('-')[1]
+                        title_mapping[numeric_id] = row["body"]
+            return title_mapping
+        except Exception as e:
+            print(f"  Warning: Could not load title data for book {book_id}: {e}")
+            return {}
+    
+    def _build_title_page_mapping_from_sqlite(self, book_id, page_structure):
+        """Build mapping of title_id to actual_page_number using SQLite database"""
+        title_page_mapping = {}
+        
+        # Get book database path
+        last_three_digits = book_id[-3:].zfill(3)
+        book_db_path = self.books_db_path / last_three_digits / f"{book_id}.db"
+        
+        if not book_db_path.exists():
+            print(f"  Warning: No database found for book {book_id} at {book_db_path}")
+            return title_page_mapping
+        
+        try:
+            import sqlite3
+            conn = sqlite3.connect(book_db_path)
+            
+            # Query the title table to get title_id -> page_id mapping
+            cursor = conn.execute("SELECT id, page FROM title")
+            
+            for title_id, page_id in cursor.fetchall():
+                # Convert to strings for consistency
+                title_id_str = str(title_id)
+                page_id_str = str(page_id)
+                
+                # Use page ID directly for TOC URLs, not printed page numbers
+                title_page_mapping[title_id_str] = page_id_str
+            
+            conn.close()
+            
+        except Exception as e:
+            print(f"  Warning: Could not load title mapping from SQLite for book {book_id}: {e}")
+        
+        return title_page_mapping
+    
     def _get_field_name(self, df, base_name):
         """Handle BOM characters in field names"""
         if base_name in df.columns:
@@ -570,6 +726,8 @@ def main():
     parser = argparse.ArgumentParser(description='Build JSON files from Shamela extraction')
     parser.add_argument('--test-single-book', action='store_true', 
                        help='Test mode: process only the first book found')
+    parser.add_argument('--generate-toc', action='store_true',
+                       help='Generate table of contents and remove HTML tags from body text')
     parser.add_argument('--shamela-path', type=str, default='C:/shamela4',
                        help='Path to Shamela base directory (default: C:/shamela4)')
     parser.add_argument('--extracted-path', type=str, default='.',
@@ -581,7 +739,11 @@ def main():
     print("=" * 50)
     
     if args.test_single_book:
-        print("🧪 RUNNING IN TEST MODE - Will process only first book")
+        print("TEST MODE: Will process only first book")
+        print("=" * 50)
+    
+    if args.generate_toc:
+        print("GENERATING TABLE OF CONTENTS - HTML tags will be removed from body text")
         print("=" * 50)
     
     # Use command line args or prompt for interactive mode
@@ -597,10 +759,12 @@ def main():
             print(f"Using default: {extracted_path}")
         
         test_mode = False
+        generate_toc = False
     else:
         shamela_path = args.shamela_path
         extracted_path = args.extracted_path if args.extracted_path != '.' else os.getcwd()
         test_mode = args.test_single_book
+        generate_toc = args.generate_toc
         
         print(f"Shamela path: {shamela_path}")
         print(f"Extracted data path: {extracted_path}")
@@ -608,7 +772,7 @@ def main():
     print()
     
     # Create builder
-    builder = JSONBuilder(shamela_path, extracted_path, test_mode=test_mode)
+    builder = JSONBuilder(shamela_path, extracted_path, test_mode=test_mode, generate_toc=generate_toc)
     
     # Build JSON files
     success = builder.build_json_files()

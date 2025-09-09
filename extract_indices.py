@@ -4,16 +4,19 @@ import sys
 from pathlib import Path
 from datetime import datetime
 import platform
+import argparse
 
 class LuceneIndexExtractor:
-    def __init__(self, shamela_base_path, output_base_path):
+    def __init__(self, shamela_base_path, output_base_path, test_mode=False):
         """
         Initialize the Lucene index extractor
         
         Args:
             shamela_base_path: Path to shamela4 directory (e.g., "C:/shamela4")
             output_base_path: Path where CSV outputs will be saved
+            test_mode: If True, process only the first book found
         """
+        self.test_mode = test_mode
         self.shamela_base_path = Path(shamela_base_path)
         self.output_base_path = Path(output_base_path)
         
@@ -126,6 +129,10 @@ class LuceneIndexExtractor:
             str(self.lucene_store_path),
             str(self.csv_output_path)
         ]
+        
+        # Add test mode parameter if enabled
+        if self.test_mode:
+            java_cmd.append('--test-single-book')
         
         print(f"\nStarting extraction...")
         print(f"Source: {self.lucene_store_path}")
@@ -250,25 +257,50 @@ class LuceneIndexExtractor:
 
 def main():
     """Main function"""
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Extract Lucene indices from Shamela to CSV files')
+    parser.add_argument('--test-single-book', action='store_true',
+                       help='Test mode: process only the first book found')
+    parser.add_argument('--shamela-path', type=str, default='C:/shamela4',
+                       help='Path to Shamela base directory (default: C:/shamela4)')
+    parser.add_argument('--output-path', type=str, default='.',
+                       help='Path to output directory (default: current directory)')
+    
+    args = parser.parse_args()
+    
     print("SHAMELA LUCENE INDEX EXTRACTOR")
     print("=" * 50)
     
-    # Get paths from user or use defaults
-    shamela_path = input("Enter Shamela base path (e.g., C:/shamela4): ").strip()
-    if not shamela_path:
-        shamela_path = "C:/shamela4"
-        print(f"Using default: {shamela_path}")
+    if args.test_single_book:
+        print("TEST MODE: Will process only first book found")
+        print("=" * 50)
+    
+    # Use command line args or prompt for interactive mode
+    if len(sys.argv) == 1:  # No command line args, interactive mode
+        shamela_path = input("Enter Shamela base path (e.g., C:/shamela4): ").strip()
+        if not shamela_path:
+            shamela_path = "C:/shamela4"
+            print(f"Using default: {shamela_path}")
+            
+        default_output = os.getcwd()
+        output_path = input(f"Enter output path (default: {default_output}): ").strip()
+        if not output_path:
+            output_path = default_output
+            print(f"Using default: {output_path}")
         
-    default_output = os.getcwd()
-    output_path = input(f"Enter output path (default: {default_output}): ").strip()
-    if not output_path:
-        output_path = default_output
-        print(f"Using default: {output_path}")
+        test_mode = False
+    else:
+        shamela_path = args.shamela_path
+        output_path = args.output_path if args.output_path != '.' else os.getcwd()
+        test_mode = args.test_single_book
         
+        print(f"Shamela path: {shamela_path}")
+        print(f"Output path: {output_path}")
+    
     print()
     
     # Create extractor and run
-    extractor = LuceneIndexExtractor(shamela_path, output_path)
+    extractor = LuceneIndexExtractor(shamela_path, output_path, test_mode=test_mode)
     
     success = extractor.extract_indices()
     
